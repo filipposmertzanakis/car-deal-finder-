@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 # --- Supabase setup ---
-***REMOVED*** = os.getenv("***REMOVED***")
-***REMOVED*** = os.getenv("***REMOVED***")
-supabase = create_client(***REMOVED***, ***REMOVED***)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Model configuration ---
 MODELS = {

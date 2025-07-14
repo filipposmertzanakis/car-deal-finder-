@@ -17,9 +17,9 @@ import os
 load_dotenv()
 
 # --- Supabase setup ---
-***REMOVED*** = os.getenv("***REMOVED***").strip()
-***REMOVED*** = os.getenv("***REMOVED***").strip()
-supabase: Client = create_client(***REMOVED***, ***REMOVED***)
+SUPABASE_URL = os.getenv("SUPABASE_URL").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY").strip()
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Car models configuration
 CAR_MODELS = [

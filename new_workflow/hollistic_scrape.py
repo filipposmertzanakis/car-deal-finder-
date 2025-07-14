@@ -16,10 +16,11 @@ import os
 load_dotenv()
 
 # --- Supabase setup ---
-***REMOVED*** = os.getenv("***REMOVED***")
-***REMOVED*** = os.getenv("***REMOVED***")
-supabase = create_client(***REMOVED***, ***REMOVED***)
-supabase: Client = create_client(***REMOVED***, ***REMOVED***)
+# --- Supabase setup ---
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Car models configuration for mapping URLs to model names
 CAR_MODELS = {
