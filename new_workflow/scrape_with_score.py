@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from supabase import Client, create_client
-
+import undetected_chromedriver as uc
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -90,14 +90,16 @@ CAR_MODELS = [
         ]
 
 # Selenium config
+
 def get_driver():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
+    options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
+    options.add_argument("--disable-gpu")
     options.add_argument("window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/115.0.0.0 Safari/537.36")
-    return webdriver.Chrome(options=options)
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.207 Safari/537.36")
+    
+    driver = uc.Chrome(options=options)
+    return driver
 
 # Fetch existing listings to avoid duplicates
 def get_existing_source_ids(model):
