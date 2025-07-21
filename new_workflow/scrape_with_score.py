@@ -95,7 +95,7 @@ def get_driver():
     print("[DEBUG] Initializing Chrome options...")
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
-    options.add_argument("--headless")  # CRITICAL for GitHub Actions
+    # options.add_argument("--headless")  # CRITICAL for GitHub Actions
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage") # Recommended for containerized environments
     options.add_argument("window-size=1920,1080")
