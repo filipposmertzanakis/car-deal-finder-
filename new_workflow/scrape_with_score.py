@@ -95,9 +95,12 @@ CAR_MODELS = [
 
 # Selenium config
 def get_driver():
+    print("[DEBUG] Initializing Chrome options...")
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
+    # options.add_argument("--headless")  # CRITICAL for GitHub Actions
     options.add_argument("--disable-gpu")
+    options.add_argument("--disable-dev-shm-usage") # Recommended for containerized environments
     options.add_argument("window-size=1920,1080")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.207 Safari/537.36")
     driver = uc.Chrome(options=options)
