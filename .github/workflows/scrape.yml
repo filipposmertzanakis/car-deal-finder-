@@ -30,7 +30,20 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libnss3 libgbm-dev libasound2 libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 libxrandr2 libgtk-3-0 wget unzip
+          sudo apt-get install -y \
+            libnss3 \
+            libgbm-dev \
+            libasound2t64 \
+            libx11-xcb1 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxi6 \
+            libxtst6 \
+            libxrandr2 \
+            libgtk-3-0 \
+            wget \
+            unzip
 
       - name: Download Chrome 138 and Chromedriver 138
         run: |
