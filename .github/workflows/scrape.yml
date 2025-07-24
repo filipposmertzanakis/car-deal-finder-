@@ -32,21 +32,29 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libgbm-dev wget unzip
 
-    - name: Install Chrome and Chromedriver (v138)
+    - name: Install Chrome and Chromedriver (Auto-detect versions)
       run: |
-        # Install Chrome
-        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -y install -f
+        # Install latest Chrome stable
+        sudo apt-get install -y google-chrome-stable
         
-        # Install Chromedriver
-        CHROME_MAJOR_VERSION=138
-        wget https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION
-        CHROMEDRIVER_VERSION=$(cat LATEST_RELEASE_$CHROME_MAJOR_VERSION)
-        wget https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+        # Get installed Chrome version
+        CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
+        echo "Installed Chrome version: $CHROME_VERSION"
+        
+        # Extract major version number
+        MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
+        echo "Chrome major version: $MAJOR_VERSION"
+        
+        # Get Chromedriver version
+        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$MAJOR_VERSION")
+        echo "Matching Chromedriver version: $CHROMEDRIVER_VERSION"
+        
+        # Download and install Chromedriver
+        wget "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
         unzip chromedriver_linux64.zip
         sudo mv chromedriver /usr/local/bin/
         sudo chmod +x /usr/local/bin/chromedriver
-
+        
         # Verify installations
         echo "Chrome version: $(google-chrome --version)"
         echo "Chromedriver version: $(chromedriver --version)"
@@ -64,5 +72,4 @@ jobs:
         EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-        EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
       run: python new_workflow/scrape_with_score.py
