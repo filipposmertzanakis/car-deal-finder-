@@ -153,7 +153,6 @@ def assign_deal_score(listing, stats):
 
     bin_size = 25000
     mileage_bin = f"{(mileage // bin_size) * bin_size}-{((mileage // bin_size) + 1) * bin_size}"
-    
     stat = stats.get((year, mileage_bin))
     if not stat:
         return None
@@ -399,16 +398,14 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
 def get_total_pages(driver, url):
     print("[INFO] Determining total number of pages...")
     driver.get(url)
-    time.sleep(1)  # Rate limiting
+    time.sleep(1)
     try:
-        LAST_PAGE_LOCATOR = (By.XPATH, "//button[span[text()='…']]/following-sibling::a")
-        last_page_element = WebDriverWait(driver, 10).until(EC.visibility_of_element_located(LAST_PAGE_LOCATOR))
+        last_page_element = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, "//button[span[text()='…']]/following-sibling::a")))
         return int(last_page_element.text.strip())
     except TimeoutException:
         print("[INFO] '...' button not found. Trying fallback method.")
     try:
-        PAGINATION_NAV_LOCATOR = (By.TAG_NAME, "nav")
-        pagination_container = WebDriverWait(driver, 5).until(EC.visibility_of_element_located(PAGINATION_NAV_LOCATOR))
+        pagination_container = WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.TAG_NAME, "nav")))
         all_links = pagination_container.find_elements(By.TAG_NAME, "a")
         page_numbers = [int(link.text.strip()) for link in all_links if link.text.strip().isdigit()]
         return max(page_numbers) if page_numbers else 1
@@ -442,14 +439,15 @@ def scrape_new_listings():
             total_pages = get_total_pages(driver, formatted_url)
             if total_pages > 2:
                 print(f"[WARN] Found {total_pages} pages, limiting check to first 2 pages for speed.")
+                print(f"[WARN] Found {total_pages} pages, limiting check to first 2 pages for speed.")
                 total_pages = 2
-                
+            
             print(f"[INFO] Total pages to scrape: {total_pages}")
             
             for page in range(1, total_pages + 1):
                 print(f"\n[INFO] Scraping page {page} for {car['make']} {car['model']}...")
                 driver.get(base_url.format(page))
-                time.sleep(1)  # Rate limiting
+                time.sleep(1)
                 
                 try:
                     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[index]")))
@@ -463,18 +461,13 @@ def scrape_new_listings():
                 for listing in listing_items:
                     try:
                         title_tag = listing.select_one('h3')
-                        if not title_tag:
-                            continue
-
+                        if not title_tag: continue
                         title_text = title_tag.get_text(separator=' ', strip=True)
                         parts = title_text.split()
-                        make = parts[0] if len(parts) > 0 else None
-                        model_name = parts[1] if len(parts) > 1 else None
+                        make, model_name = (parts[0], parts[1]) if len(parts) > 1 else (None, None)
                         year = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else None
-
                         link_tag = listing.select_one('a.row-anchor')
-                        if not link_tag:
-                            continue
+                        if not link_tag: continue
                         relative_url = link_tag['href']
                         source_id = str(relative_url.split('/')[-1].split('-')[0]).strip()
 
@@ -482,14 +475,11 @@ def scrape_new_listings():
                         price_tag = listing.select_one('span.lg\\:tw-text-3xl span')
                         price_raw = price_tag.get_text(strip=True).replace('.', '').replace('€', '') if price_tag else '0'
                         price = float(price_raw) if price_raw.replace(',', '').isdigit() else None
-
                         mileage_tag = listing.select_one('div[title="Χιλιόμετρα"] p')
                         mileage_raw = mileage_tag.get_text(strip=True) if mileage_tag else None
                         mileage = int(mileage_raw.replace('.', '').replace('Km', '').strip()) if mileage_raw else None
-                        
                         img_tag = listing.select_one('img')
                         image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
-
                         description_tag = listing.select_one('h3 + p')
                         description = description_tag.get_text(strip=True) if description_tag else ""
 
@@ -517,17 +507,14 @@ def scrape_new_listings():
                         }
 
                         score = assign_deal_score(new_listing, stats)
-                        if score:
-                            new_listing["deal_score"] = score
+                        if score: new_listing["deal_score"] = score
 
                         if source_id in existing_ids:
-                            print(f"[INFO] Updating deal score for existing listing: {source_id} -> Score: {score}")
                             supabase.table("listings").update({"deal_score": score}).eq("source_id", source_id).execute()
                         else:
-                            print(f"[✓] Saved new listing: {source_id} -> Score: {score}")
                             supabase.table("listings").insert(new_listing).execute()
                             existing_ids.add(source_id)
-
+                        
                         all_processed_listings.append(new_listing)
 
                     except Exception as e:
@@ -632,5 +619,8 @@ if __name__ == "__main__":
             print("[INFO] Scrape completed successfully.")
             break
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"[ERROR] An error occurred during scraping: {e}")
+            time.sleep(60)
             time.sleep(60)
