@@ -102,26 +102,29 @@ CAR_MODELS = [
 def get_driver():
     print("[DEBUG] Initializing Chrome options...")
     options = uc.ChromeOptions()
+    
+    # Essential options for GitHub Actions
     options.add_argument("--no-sandbox")
-    options.add_argument("--headless=new")  # New headless mode
-    options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--remote-debugging-port=9222")
+    
+    # Set binary locations explicitly
+    options.binary_location = "/opt/chrome/chrome"
+    
     print("[DEBUG] Starting browser...")
     try:
-        driver = uc.Chrome(options=options)
+        driver = uc.Chrome(
+            options=options,
+            driver_executable_path="/usr/local/bin/chromedriver",
+            version_main=138  # Match your Chrome version
+        )
         print("[DEBUG] Browser initialized successfully")
-        print("Chrome binary exists:", os.path.exists('/opt/chrome/chrome'))
-        print("Chrome version:", driver.capabilities['browserVersion'])
-        print("ChromeDriver version:", driver.capabilities['chrome']['chromedriverVersion'])
-
         return driver
     except Exception as e:
-        print(f"Failed to initialize Chrome: {str(e)}")
-        print("Current PATH:", os.environ['PATH'])
-        print("Chrome location:", shutil.which('google-chrome'))
+        print(f"[ERROR] Failed to initialize browser: {e}")
         raise
     
 

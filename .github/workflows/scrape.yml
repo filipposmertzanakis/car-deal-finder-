@@ -45,29 +45,41 @@ jobs:
             wget \
             unzip
 
-      - name: Download Chrome 138 and Chromedriver 138
+      - name: Install Chrome and Chromedriver
         run: |
-          echo "⬇️ Download Chrome..."
-          wget https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.94/linux64/chrome-linux64.zip
+          # Install Chrome dependencies
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 \
+            libgbm1 \
+            libasound2t64 \
+            libx11-xcb1 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxdamage1 \
+            libxi6 \
+            libxtst6 \
+            libxrandr2 \
+            libgtk-3-0 \
+            wget \
+            unzip
+
+          # Download and install Chrome
+          CHROME_VERSION="138.0.7204.94"
+          wget https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chrome-linux64.zip
           unzip chrome-linux64.zip -d chrome
+          sudo mv chrome/chrome-linux64 /opt/chrome
+          sudo ln -s /opt/chrome/chrome /usr/local/bin/chrome
 
-          echo "⬇️ Download Chromedriver..."
-          wget https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.94/linux64/chromedriver-linux64.zip
+          # Download and install Chromedriver
+          wget https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chromedriver-linux64.zip
           unzip chromedriver-linux64.zip -d chromedriver
-
-          echo "✅ Install Chrome..."
-          sudo mkdir -p /opt/chrome
-          sudo mv chrome/chrome-linux64/* /opt/chrome/
-          sudo ln -s /opt/chrome/chrome /usr/local/bin/google-chrome
-
-          echo "✅ Install Chromedriver..."
           sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
-          echo "✅ Verify installation..."
-          ls -la /opt/chrome/
-          google-chrome --version
-          chromedriver --version
+          # Verify installations
+          echo "Chrome version:" && chrome --version
+          echo "Chromedriver version:" && chromedriver --version
 
       - name: Install Python dependencies
         run: |
