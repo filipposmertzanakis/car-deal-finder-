@@ -1,104 +1,68 @@
-name: Scrape Car Listings
+name: Car Scraping with Undetected Chromedriver
 
 on:
   schedule:
-    - cron: "0 */10 * * *"
-  workflow_dispatch:
+    - cron: '*/30 * * * *'  # Every 30 minutes
+  workflow_dispatch:          # Allow manual triggers
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 30       # Prevent hanging jobs
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Verify scraping script exists
-        run: |
-          if [ ! -f "new_workflow/scrape_with_score.py" ]; then
-            echo "❌ Error: new_workflow/scrape_with_score.py not found"
-            ls -la new_workflow
-            exit 1
-          fi
-          echo "✅ Script found!"
+    - name: Verify script exists
+      run: |
+        if [ ! -f "new_workflow/scrape_with_score.py" ]; then
+          echo "❌ Error: Script not found!"
+          exit 1
+        fi
+        echo "✅ Script found"
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 \
-            libgbm-dev \
-            libasound2t64 \
-            libx11-xcb1 \
-            libxcomposite1 \
-            libxcursor1 \
-            libxdamage1 \
-            libxi6 \
-            libxtst6 \
-            libxrandr2 \
-            libgtk-3-0 \
-            wget \
-            unzip
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgbm-dev wget unzip
 
-      - name: Install Chrome and Chromedriver
-        run: |
-          # Install Chrome dependencies
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 \
-            libgbm1 \
-            libasound2t64 \
-            libx11-xcb1 \
-            libxcomposite1 \
-            libxcursor1 \
-            libxdamage1 \
-            libxi6 \
-            libxtst6 \
-            libxrandr2 \
-            libgtk-3-0 \
-            wget \
-            unzip
+    - name: Install Chrome and Chromedriver (v138)
+      run: |
+        # Install Chrome
+        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -y install -f
+        
+        # Install Chromedriver
+        CHROME_MAJOR_VERSION=138
+        wget https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION
+        CHROMEDRIVER_VERSION=$(cat LATEST_RELEASE_$CHROME_MAJOR_VERSION)
+        wget https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+        unzip chromedriver_linux64.zip
+        sudo mv chromedriver /usr/local/bin/
+        sudo chmod +x /usr/local/bin/chromedriver
 
-          # Download and install Chrome
-          CHROME_VERSION="138.0.7204.94"
-          wget https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chrome-linux64.zip
-          unzip chrome-linux64.zip -d chrome
-          sudo mv chrome/chrome-linux64 /opt/chrome
-          sudo ln -s /opt/chrome/chrome /usr/local/bin/chrome
+        # Verify installations
+        echo "Chrome version: $(google-chrome --version)"
+        echo "Chromedriver version: $(chromedriver --version)"
 
-          # Download and install Chromedriver
-          wget https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chromedriver-linux64.zip
-          unzip chromedriver-linux64.zip -d chromedriver
-          sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
-          sudo chmod +x /usr/local/bin/chromedriver
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install undetected-chromedriver requests beautifulsoup4 selenium supabase python-dotenv
 
-          # Verify installations
-          echo "Chrome version:" && chrome --version
-          echo "Chromedriver version:" && chromedriver --version
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 selenium supabase python-dotenv undetected-chromedriver setuptools
-      
-      - name: Debug system state
-        run: |
-          echo "=== System Debug Info ==="
-          echo "Chrome path:" $(which chrome)
-          echo "Chromedriver path:" $(which chromedriver)
-          ls -la /opt/chrome/
-          ls -la /usr/local/bin/
-          echo "Environment:"
-          printenv
-
-      - name: Run scraping script
-        env:
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          CHROME_PATH: /opt/chrome/chrome
-        run: python new_workflow/scrape_with_score.py
+    - name: Run scraping script
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+        EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+      run: python new_workflow/scrape_with_score.py
