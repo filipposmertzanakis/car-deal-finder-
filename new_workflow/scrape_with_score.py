@@ -1,6 +1,9 @@
 import time
 from datetime import datetime
 from io import BytesIO
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import requests
 from bs4 import BeautifulSoup
@@ -14,6 +17,7 @@ from supabase import Client, create_client
 import undetected_chromedriver as uc
 from dotenv import load_dotenv
 import os
+import shutil
 load_dotenv()
 
 # --- Supabase setup ---
@@ -21,7 +25,14 @@ SUPABASE_URL = os.getenv("SUPABASE_URL").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_KEY").strip()
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Car models configuration
+# --- Email setup ---
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")  # e.g., smtp.gmail.com
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USER = os.getenv("EMAIL_USER")  # Your email
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # Your email password or app password
+EMAIL_RECIPIENT = os.getenv("filipposmertz@gmail.com")  # Recipient email
+
+# Complete Car models configuration
 CAR_MODELS = [
     {
         "make": "Toyota",
@@ -57,67 +68,73 @@ CAR_MODELS = [
         "url_template": "https://www.car.gr/used-cars/peugeot/208.html?activeq=peugot%20208&category=15001&crashed=f&from_suggester=1&location2=3&make=13198&model=15403&offer_type=sale&pg={}",
         "supabase_model": "208",
         "stats_table": "208_price_stats_by_mileage"
-    }
-    , {
+    },
+    {
         "make": "Hyundai",
         "model": "i10",
         "url_template": "https://www.car.gr/used-cars/hyundai/i10.html?activeq=Hyundai+i10&category=15001&crashed=f&from_suggester=1&location2=3&make=13205&model=14904&offer_type=sale&pg={}",
         "supabase_model": "i10",
         "stats_table": "i10_price_stats_by_mileage"
-        },
+    },
     {
         "make": "Hyundai",
         "model": "i20",
         "url_template": "https://www.car.gr/used-cars/hyundai/i_20.html?activeq=Hyundai+i20&category=15001&crashed=f&from_suggester=1&location2=3&make=12522&model=15412&offer_type=sale&pg={}",
         "supabase_model": "i20",
         "stats_table": "i20_price_stats_by_mileage"
-    }
-    , {
+    },
+    {
         "make": "Citroen",
         "model": "C3",
         "url_template": "https://www.car.gr/used-cars/citroen/c3.html?activeq=Citroen+C3&category=15001&crashed=f&from_suggester=1&location2=3&make=13199&model=15404&offer_type=sale&pg={}",
         "supabase_model": "C3",
         "stats_table": "c3_price_stats_by_mileage"
-    }
-    , {
+    },
+    {
         "make": "Ford",
         "model": "Fiesta",
         "url_template": "https://www.car.gr/used-cars/ford/fiesta.html?activeq=Ford+Fiesta&category=15001&crashed=f&from_suggester=1&location2=3&make=13150&model=14843&offer_type=sale&pg={}",
         "supabase_model": "Fiesta",
         "stats_table": "fiesta_price_stats_by_mileage"
     }
-
-        ]
-
-# Selenium config
+]
 
 def get_driver():
     print("[DEBUG] Initializing Chrome options...")
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
-    # options.add_argument("--headless")  # CRITICAL for GitHub Actions
+    options.add_argument("--headless=new")  # New headless mode
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-dev-shm-usage") # Recommended for containerized environments
+    options.add_argument("--disable-dev-shm-usage")
     options.add_argument("window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36") # Use a valid, recent User-Agent
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
-    print("[DEBUG] Options set. Attempting to start uc.Chrome()...")
+    print("[DEBUG] Starting browser...")
     try:
-        # Let UC find the browser automatically, which is more reliable in this setup
         driver = uc.Chrome(options=options)
-        print("[DEBUG] uc.Chrome() initialized SUCCESSFULLY.")
+        print("[DEBUG] Browser initialized successfully")
+        print("Chrome binary exists:", os.path.exists('/opt/chrome/chrome'))
+        print("Chrome version:", driver.capabilities['browserVersion'])
+        print("ChromeDriver version:", driver.capabilities['chrome']['chromedriverVersion'])
+
         return driver
     except Exception as e:
-        # If it fails, this will print a clear error message in your Actions log
-        print(f"[FATAL] Failed to initialize undetected-chromedriver: {e}")
+        print(f"Failed to initialize Chrome: {str(e)}")
+        print("Current PATH:", os.environ['PATH'])
+        print("Chrome location:", shutil.which('google-chrome'))
         raise
+    
 
-# Fetch existing listings to avoid duplicates
 def get_existing_source_ids(model):
+    """Get all existing source_ids for a model, ensuring consistent string type"""
     response = supabase.table("listings").select("source_id").eq("model", model).execute()
-    return set([item["source_id"] for item in response.data])
+    return set(str(item["source_id"]).strip() for item in response.data)
 
-# Fetch price stats from Supabase
+def get_emailed_listings(model):
+    """Get all listings that have been emailed, ensuring consistent string type"""
+    response = supabase.table("listings").select("source_id").eq("model", model).eq("email_sent", True).execute()
+    return set(str(item["source_id"]).strip() for item in response.data)
+
 def get_stats(stats_table):
     response = supabase.table(stats_table).select("*").execute()
     stats = {}
@@ -126,21 +143,20 @@ def get_stats(stats_table):
         stats[key] = row
     return stats
 
-# Assign deal score using the Granular Quartile Model
 def assign_deal_score(listing, stats):
     try:
         year = int(listing['year'])
         mileage = int(listing['mileage'])
         price = float(listing['price'])
     except (ValueError, TypeError, KeyError):
-        return None  # Return None if data is missing or invalid
+        return None
 
     bin_size = 25000
     mileage_bin = f"{(mileage // bin_size) * bin_size}-{((mileage // bin_size) + 1) * bin_size}"
     
     stat = stats.get((year, mileage_bin))
     if not stat:
-        return None  # No statistical data for this car's group
+        return None
 
     p25 = float(stat['p25_price'])
     median = float(stat['median_price'])
@@ -155,7 +171,231 @@ def assign_deal_score(listing, stats):
     else:
         return 4  # Expensive
 
-# Get total pages from pagination
+def send_email_notification(high_profit_deals, all_stats_by_model):
+    """Send email notification for cars with high profit margins"""
+    if not high_profit_deals:
+        print("[INFO] No high profit deals found. No email sent.")
+        return False
+    
+    if not all([EMAIL_USER, EMAIL_PASSWORD, EMAIL_RECIPIENT]):
+        print("[WARN] Email configuration missing. Skipping email notification.")
+        return False
+    
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_USER
+        msg['To'] = EMAIL_RECIPIENT
+        msg['Subject'] = f"🚗 Ειδοποίηση Επικερδών Αυτοκινήτων - {len(high_profit_deals)} Ευκαιρίες!"
+        
+        # Complete HTML email body with styling
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 0; 
+                    padding: 20px; 
+                    background-color: #f8f9ff;
+                    color: #2c3e50;
+                }}
+                .container {{
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background-color: white;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                .header {{ 
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                    color: white; 
+                    padding: 30px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 28px;
+                    font-weight: 600;
+                }}
+                .header p {{
+                    margin: 10px 0 0 0;
+                    font-size: 16px;
+                    opacity: 0.9;
+                }}
+                .content {{
+                    padding: 20px;
+                }}
+                .deal {{ 
+                    border: 2px solid #e3f2fd;
+                    border-radius: 10px; 
+                    margin: 20px 0; 
+                    padding: 20px; 
+                    background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+                    transition: transform 0.2s ease;
+                }}
+                .deal:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(30, 60, 114, 0.15);
+                }}
+                .deal-title {{ 
+                    color: #1e3c72; 
+                    font-weight: bold; 
+                    font-size: 20px;
+                    margin-bottom: 15px;
+                    border-bottom: 1px solid #e3f2fd;
+                    padding-bottom: 10px;
+                }}
+                .profit {{ 
+                    color: #1976d2; 
+                    font-weight: bold; 
+                    font-size: 18px;
+                    background-color: #e3f2fd;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    display: inline-block;
+                }}
+                .details {{ 
+                    margin: 12px 0; 
+                    font-size: 14px;
+                    line-height: 1.6;
+                }}
+                .details strong {{
+                    color: #1e3c72;
+                }}
+                .link {{ 
+                    display: inline-block;
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                    color: white;
+                    text-decoration: none; 
+                    padding: 12px 24px;
+                    border-radius: 6px;
+                    font-weight: 500;
+                    margin-top: 10px;
+                    transition: all 0.3s ease;
+                }}
+                .link:hover {{
+                    background: linear-gradient(135deg, #164463 0%, #1f4287 100%);
+                    transform: translateY(-1px);
+                }}
+                .footer {{ 
+                    margin-top: 30px; 
+                    padding: 20px;
+                    background-color: #f8f9ff;
+                    color: #666; 
+                    font-size: 12px;
+                    text-align: center;
+                    border-top: 1px solid #e3f2fd;
+                }}
+                .stats {{
+                    background: linear-gradient(135deg, #e3f2fd 0%, #f8f9ff 100%);
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    text-align: center;
+                }}
+                .stats h3 {{
+                    color: #1e3c72;
+                    margin: 0 0 10px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🚗 Ειδοποίηση Επικερδών Αυτοκινήτων</h1>
+                    <p>Βρέθηκαν {len(high_profit_deals)} εξαιρετικές ευκαιρίες με περιθώρια κέρδους 30%+ και δυνατότητα κέρδους €1,500+</p>
+                </div>
+                <div class="content">
+        """
+        
+        # Calculate total potential profit
+        total_profit = sum(deal['discount_vs_p25'] for deal in high_profit_deals)
+        avg_margin = sum(deal['profit_margin_percent'] for deal in high_profit_deals) / len(high_profit_deals)
+        
+        html_body += f"""
+                    <div class="stats">
+                        <h3>📊 Στατιστικά Περίληψης</h3>
+                        <p><strong>Συνολικό Δυνητικό Κέρδος:</strong> €{total_profit:,.0f} | <strong>Μέσο Περιθώριο:</strong> {avg_margin:.1f}%</p>
+                    </div>
+        """
+        
+        for i, deal in enumerate(high_profit_deals, 1):
+            listing = deal['listing']
+            profit_margin = deal['profit_margin_percent']
+            discount_amount = deal['discount_vs_p25']
+            market_price_p25 = deal['market_price_p25']
+            
+            # Calculate difference from median (P50)
+            year = int(listing['year'])
+            mileage = int(listing['mileage'])
+            model = listing['model']
+            bin_size = 25000
+            mileage_bin = f"{(mileage // bin_size) * bin_size}-{((mileage // bin_size) + 1) * bin_size}"
+            
+            # Get median price from stats for this model
+            median_price = market_price_p25  # fallback
+            if model in all_stats_by_model:
+                model_stats = all_stats_by_model[model]
+                stat = model_stats.get((year, mileage_bin))
+                if stat:
+                    median_price = float(stat['median_price'])
+            
+            median_discount = median_price - listing['price']
+            median_margin = (median_discount / median_price) * 100 if median_price > 0 else 0
+            
+            html_body += f"""
+            <div class="deal">
+                <div class="deal-title">#{i} - {listing['make']} {listing['model']} {listing['year']}</div>
+                <div class="details">
+                    <strong>Τιμή Αγγελίας:</strong> €{listing['price']:,.0f} | 
+                    <strong>Μέση Αξία Αγοράς (P50):</strong> €{median_price:,.0f} | 
+                    <strong>Φθηνή Τιμή (P25):</strong> €{market_price_p25:,.0f}
+                </div>
+                <div class="profit">
+                    💰 Κέρδος από μέση αξία: €{median_discount:,.0f} ({median_margin:.1f}% έκπτωση!)
+                </div>
+                <div class="details">
+                    <strong>Χιλιόμετρα:</strong> {listing['mileage']:,} km | 
+                    <strong>Έτος:</strong> {listing['year']}
+                </div>
+                <div class="details">
+                    <strong>Περιγραφή:</strong> {listing.get('description', 'Δεν υπάρχει περιγραφή')[:150]}{'...' if len(listing.get('description', '')) > 150 else ''}
+                </div>
+                <div class="details">
+                    <a href="{listing['url']}" class="link" target="_blank">Δες την Αγγελία →</a>
+                </div>
+            </div>
+            """
+        
+        html_body += f"""
+                </div>
+                <div class="footer">
+                    <p><strong>Ειδοποίηση δημιουργήθηκε:</strong> {datetime.now().strftime('%d %B %Y στις %H:%M:%S')}</p>
+                    <p>Αυτή είναι μια αυτοματοποιημένη ειδοποίηση από το σύστημα παρακολούθησης αυτοκινήτων σας.</p>
+                    <p>💡 <em>Συμβουλή: Ενεργήστε γρήγορα σε αυτές τις ευκαιρίες καθώς μπορεί να μην διαρκέσουν πολύ!</em></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        # Send email
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASSWORD)
+            server.send_message(msg)
+        
+        print(f"[✓] Email notification sent successfully for {len(high_profit_deals)} high profit deals!")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to send email: {e}")
+        return False
+
 def get_total_pages(driver, url):
     print("[INFO] Determining total number of pages...")
     driver.get(url)
@@ -176,32 +416,35 @@ def get_total_pages(driver, url):
         print("[WARN] No pagination found at all. Assuming 1 page.")
         return 1
 
-# Scrape and process listings
 def scrape_new_listings():
     driver = get_driver()
-    
+    all_high_profit_deals = []  # Collect high profit deals across all models
+    all_stats_by_model = {}  # Store stats for email calculations
+    problem_words = ["προβλημα", "βλάβη", "ζημιά", "ατυχημα"]
+
     for car in CAR_MODELS:
         try:
             print(f"\n[INFO] Scraping listings for {car['make']} {car['model']}...")
             base_url = car['url_template']
-            print(f"DEBUG raw URL: {repr(base_url)}")
             model = car['supabase_model']
             stats_table = car['stats_table']
             
             print("[INFO] Fetching market data...")
             existing_ids = get_existing_source_ids(model)
+            emailed_ids = get_emailed_listings(model)
+            print(f"[INFO] Found {len(emailed_ids)} listings already emailed for {model}.")
+            
             stats = get_stats(stats_table)
+            all_stats_by_model[model] = stats
             
             all_processed_listings = []
-            formated_url = base_url.format(1)
-            print(f"[INFO] Formatted URL: {formated_url}")
-            total_pages = get_total_pages(driver, base_url.format(1))
+            formatted_url = base_url.format(1)
+            total_pages = get_total_pages(driver, formatted_url)
             if total_pages > 2:
-                print(f"[WARN] Found {total_pages} pages, limiting check to first 5 pages for speed.")
+                print(f"[WARN] Found {total_pages} pages, limiting check to first 2 pages for speed.")
                 total_pages = 2
                 
             print(f"[INFO] Total pages to scrape: {total_pages}")
-            print("[INFO] Starting scrape...")
             
             for page in range(1, total_pages + 1):
                 print(f"\n[INFO] Scraping page {page} for {car['make']} {car['model']}...")
@@ -233,7 +476,7 @@ def scrape_new_listings():
                         if not link_tag:
                             continue
                         relative_url = link_tag['href']
-                        source_id = relative_url.split('/')[-1].split('-')[0]
+                        source_id = str(relative_url.split('/')[-1].split('-')[0]).strip()
 
                         full_url = f"https://www.car.gr{relative_url}"
                         price_tag = listing.select_one('span.lg\\:tw-text-3xl span')
@@ -250,6 +493,11 @@ def scrape_new_listings():
                         description_tag = listing.select_one('h3 + p')
                         description = description_tag.get_text(strip=True) if description_tag else ""
 
+                                # Skip listings with "Προβλημα" (case insensitive) in description
+                        if any(word in description.lower() for word in problem_words):
+                            print(f"[INFO] Skipping listing with problematic description: {full_url}")
+                            continue
+
                         if not all([source_id, make, model_name, year, mileage, price]):
                             print(f"[WARN] Skipping listing with missing core data: {full_url}")
                             continue
@@ -257,14 +505,15 @@ def scrape_new_listings():
                         new_listing = {
                             "source_id": source_id,
                             "make": make,
-                            "model": model,  # Use supabase_model for consistency
+                            "model": model,
                             "year": year,
                             "mileage": mileage,
                             "price": price,
                             "url": full_url,
                             "image_url": image_url,
                             "description": description,
-                            "timestamp": datetime.utcnow().isoformat()
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "email_sent": False
                         }
 
                         score = assign_deal_score(new_listing, stats)
@@ -284,74 +533,104 @@ def scrape_new_listings():
                     except Exception as e:
                         print(f"[!] Error parsing a listing: {e}")
 
-                # Process good deals for the current model
-                good_deals_for_report = []
-                for listing in all_processed_listings:
-                    try:
-                        year = int(listing['year'])
-                        mileage = int(listing['mileage'])
-                        price = float(listing['price'])
+            # Process good deals for the current model
+            high_profit_deals_for_model = []
+            
+            for listing in all_processed_listings:
+                try:
+                    source_id = str(listing['source_id']).strip()
+                    year = int(listing['year'])
+                    mileage = int(listing['mileage'])
+                    price = float(listing['price'])
 
-                        bin_size = 25000
-                        mileage_bin = f"{(mileage // bin_size) * bin_size}-{((mileage // bin_size) + 1) * bin_size}"
-                        stat = stats.get((year, mileage_bin))
-                        if not stat:
-                            continue
-
-                        p25 = float(stat['p25_price'])
-
-                        if price >= p25:
-                            continue
-
-                        discount_ratio = (p25 - price) / p25
-
-                        if discount_ratio >= 0.2:    score = 10
-                        elif discount_ratio >= 0.15: score = 9
-                        elif discount_ratio >= 0.1:  score = 8
-                        elif discount_ratio >= 0.07: score = 7
-                        elif discount_ratio >= 0.05: score = 6
-                        elif discount_ratio >= 0.03: score = 4
-                        else:                        score = 3
-                            
-                        good_deals_for_report.append({
-                            "listing": listing,
-                            "stat": stat,
-                            "discount_vs_p25": p25 - price,
-                            "deal_score_user": score
-                        })
-
-                    except (ValueError, TypeError, KeyError):
+                    bin_size = 25000
+                    mileage_bin = f"{(mileage // bin_size) * bin_size}-{((mileage // bin_size) + 1) * bin_size}"
+                    stat = stats.get((year, mileage_bin))
+                    if not stat:
                         continue
 
-                # Clear previous highlights for this model
-                supabase.table("listings").update({"highlighted": False}).eq("model", model).execute()
+                    p25 = float(stat['p25_price'])
 
-                # Flag top 10 as highlighted for this model
-                good_deals_for_report = sorted(
-                    good_deals_for_report,
-                    key=lambda x: (x['deal_score_user'], x['discount_vs_p25']),
-                    reverse=True
-                )[:10]
+                    if price >= p25:
+                        continue
 
-                for item in good_deals_for_report:
-                    listing_id = item["listing"]["source_id"]
-                    supabase.table("listings").update({"highlighted": True}).eq("source_id", listing_id).execute()
+                    discount_amount = p25 - price
+                    profit_margin_percent = (discount_amount / p25) * 100
+
+                    # Debug check
+                    print(f"[DEBUG] Checking email eligibility for {source_id}")
+                    print(f"[DEBUG] Emailed IDs contains {source_id}: {source_id in emailed_ids}")
+                    
+                    # Only consider if not already emailed and meets profit criteria
+                    if (profit_margin_percent >= 30 and 
+                        discount_amount >= 1500 and 
+                        source_id not in emailed_ids):
+                        
+                        high_profit_deal = {
+                            "listing": listing,
+                            "market_price_p25": p25,
+                            "discount_vs_p25": discount_amount,
+                            "profit_margin_percent": profit_margin_percent
+                        }
+                        high_profit_deals_for_model.append(high_profit_deal)
+                        all_high_profit_deals.append(high_profit_deal)
+                        print(f"[💰] NEW HIGH PROFIT DEAL: {listing['make']} {listing['model']} {listing['year']} - {profit_margin_percent:.1f}% profit margin (€{discount_amount:,.0f} profit)!")
+
+                except (ValueError, TypeError, KeyError) as e:
+                    print(f"[ERROR] Error processing deal score: {e}")
+                    continue
+
+            print(f"[INFO] Found {len(high_profit_deals_for_model)} high profit deals for {car['make']} {car['model']}")
 
         except Exception as e:
             print(f"[ERROR] Failed to scrape {car['make']} {car['model']}: {e}")
             continue
 
     driver.quit()
+    
+    # Final check before sending emails
+    if all_high_profit_deals:
+        print(f"\n[INFO] Verifying {len(all_high_profit_deals)} potential deals before emailing...")
+        
+        # Get fresh list of emailed IDs from database
+        all_emailed_ids = set()
+        for car in CAR_MODELS:
+            all_emailed_ids.update(get_emailed_listings(car['supabase_model']))
+        
+        # Filter out any deals that were marked as emailed since we checked
+        final_deals_to_email = [
+            deal for deal in all_high_profit_deals 
+            if str(deal['listing']['source_id']).strip() not in all_emailed_ids
+        ]
+        
+        if final_deals_to_email:
+            print(f"[INFO] Sending email notification for {len(final_deals_to_email)} verified new high profit deals...")
+            final_deals_to_email.sort(key=lambda x: x['profit_margin_percent'], reverse=True)
+            
+            email_sent_successfully = send_email_notification(final_deals_to_email, all_stats_by_model)
+            
+            if email_sent_successfully:
+                # Mark all sent deals in a single transaction
+                source_ids = [str(deal['listing']['source_id']).strip() for deal in final_deals_to_email]
+                response = supabase.table("listings")\
+                    .update({"email_sent": True})\
+                    .in_("source_id", source_ids)\
+                    .execute()
+                print(f"[✓] Marked all source_ids as emailed, response: {response}")
+        else:
+            print("[INFO] All potential deals were already emailed (race condition avoided)")
+    else:
+        print("[INFO] No new high profit deals found - no email needed.")
+    
     print("[INFO] Scrape completed successfully for all models.")
 
-# Entry point
 if __name__ == "__main__":
     while True:
         try:
             print("\n[INFO] Starting new listings scrape...")
             scrape_new_listings()
             print("[INFO] Scrape completed successfully.")
-            break  # Exit loop if successful (remove or adjust for continuous scraping)
+            break
         except Exception as e:
             print(f"[ERROR] An error occurred during scraping: {e}")
-            time.sleep(60)  # Wait before retrying 
+            time.sleep(60)

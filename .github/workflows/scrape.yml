@@ -3,7 +3,7 @@ name: Scrape Car Listings
 on:
   schedule:
     - cron: "0 */10 * * *"
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
 
 jobs:
   scrape:
@@ -27,32 +27,35 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libgbm-dev libasound2 libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 libxrandr2 libgtk-3-0 wget unzip
+
       - name: Download Chrome 138 and Chromedriver 138
         run: |
           echo "⬇️ Download Chrome..."
           wget https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.94/linux64/chrome-linux64.zip
-          unzip chrome-linux64.zip
+          unzip chrome-linux64.zip -d chrome
 
           echo "⬇️ Download Chromedriver..."
           wget https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.94/linux64/chromedriver-linux64.zip
-          unzip chromedriver-linux64.zip
+          unzip chromedriver-linux64.zip -d chromedriver
 
-          echo "✅ Move chromedriver to /usr/local/bin"
-          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+          echo "✅ Install Chrome..."
+          sudo mv chrome/chrome-linux64 /opt/chrome
+          sudo ln -s /opt/chrome/chrome /usr/local/bin/google-chrome
+
+          echo "✅ Install Chromedriver..."
+          sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
-          echo "✅ Move chrome binary to /usr/local/bin/google-chrome"
-          sudo mv chrome-linux64/chrome /usr/local/bin/google-chrome
-          sudo chmod +x /usr/local/bin/google-chrome
+          echo "✅ Fix sandbox permissions..."
+          sudo chmod 4755 /opt/chrome/chrome-sandbox
 
           echo "✅ Installed versions:"
           google-chrome --version
           chromedriver --version
-
-      - name: Confirm installed versions
-        run: |
-          echo "Chrome: $(google-chrome --version)"
-          echo "ChromeDriver: $(chromedriver --version)"
 
       - name: Install Python dependencies
         run: |
@@ -63,4 +66,5 @@ jobs:
         env:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          CHROME_PATH: /opt/chrome/chrome
         run: python new_workflow/scrape_with_score.py
