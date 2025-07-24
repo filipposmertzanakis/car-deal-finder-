@@ -104,12 +104,28 @@ def get_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-logging")
+    options.add_argument("--log-level=3")
+    options.add_argument("--silent")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    
+    # Add headless option for CI environments
+    if os.getenv('GITHUB_ACTIONS') == 'true':
+        print("[DEBUG] Running in CI environment, enabling headless mode")
+        options.add_argument("--headless=new")
+    
     print("[DEBUG] Starting browser...")
     try:
-        driver = uc.Chrome(options=options)
+        driver = uc.Chrome(
+            options=options,
+            enable_cdp_events=True,
+            driver_executable_path='/usr/local/bin/chromedriver',
+            browser_executable_path='/usr/local/bin/google-chrome'
+        )
+        driver.set_page_load_timeout(60)  # Set 60-second timeout
         print("[DEBUG] Browser initialized successfully")
         return driver
     except Exception as e:

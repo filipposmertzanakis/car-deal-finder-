@@ -65,4 +65,10 @@ jobs:
         EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-      run: python new_workflow/scrape_with_score.py
+      run: |
+        # Enable debug logging
+        export DEBUG=1
+        python -u new_workflow/scrape_with_score.py 2>&1 | tee scrape.log
+        echo "=== Scrape log ==="
+        cat scrape.log
+        echo "=================="
