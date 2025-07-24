@@ -56,17 +56,16 @@ jobs:
           unzip chromedriver-linux64.zip -d chromedriver
 
           echo "✅ Install Chrome..."
-          sudo mv chrome/chrome-linux64 /opt/chrome
+          sudo mkdir -p /opt/chrome
+          sudo mv chrome/chrome-linux64/* /opt/chrome/
           sudo ln -s /opt/chrome/chrome /usr/local/bin/google-chrome
 
           echo "✅ Install Chromedriver..."
           sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
-          echo "✅ Fix sandbox permissions..."
-          sudo chmod 4755 /opt/chrome/chrome-sandbox
-
-          echo "✅ Installed versions:"
+          echo "✅ Verify installation..."
+          ls -la /opt/chrome/
           google-chrome --version
           chromedriver --version
 
