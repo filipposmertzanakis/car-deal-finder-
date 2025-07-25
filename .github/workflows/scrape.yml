@@ -30,32 +30,86 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgbm-dev wget unzip
+        sudo apt-get install -y \
+          libgbm-dev \
+          wget \
+          unzip \
+          libnss3-dev \
+          libgconf-2-4 \
+          libxss1 \
+          libappindicator1 \
+          libindicator7 \
+          gconf-service \
+          libgconf2-dev \
+          libxss1 \
+          libappindicator1 \
+          fonts-liberation \
+          libnspr4 \
+          libnss3 \
+          libx11-xcb1 \
+          libxtst6 \
+          libxrandr2 \
+          libasound2 \
+          libpangocairo-1.0-0 \
+          libatk1.0-0 \
+          libcairo-gobject2 \
+          libgtk-3-0 \
+          libgdk-pixbuf2.0-0 \
+          xvfb
 
-    - name: Download Chrome 138 and Chromedriver 138
+    - name: Setup Chrome and Chromedriver
       run: |
-        echo "⬇️ Downloading Chrome..."
-        wget https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.94/linux64/chrome-linux64.zip
-        unzip chrome-linux64.zip
+        echo "⬇️ Downloading and installing Chrome..."
         
-        echo "⬇️ Downloading Chromedriver..."
-        wget https://storage.googleapis.com/chrome-for-testing-public/138.0.7204.94/linux64/chromedriver-linux64.zip
-        unzip chromedriver-linux64.zip
+        # Download stable Chrome version
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
         
-        echo "✅ Moving binaries to system paths"
-        sudo mv chrome-linux64/chrome /usr/local/bin/google-chrome
-        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
-        sudo chmod +x /usr/local/bin/google-chrome
+        # Get Chrome version and download matching chromedriver
+        CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
+        echo "Chrome version: $CHROME_VERSION (Major: $CHROME_MAJOR_VERSION)"
+        
+        # Download matching chromedriver
+        echo "⬇️ Downloading matching Chromedriver..."
+        CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip"
+        
+        # If specific version not found, try latest stable
+        if ! wget -q --spider "$CHROMEDRIVER_URL"; then
+          echo "Specific version not found, trying latest stable..."
+          LATEST_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone.json" | grep -o "\"$CHROME_MAJOR_VERSION\":{\"version\":\"[^\"]*" | cut -d'"' -f4)
+          CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${LATEST_VERSION}/linux64/chromedriver-linux64.zip"
+        fi
+        
+        wget -O chromedriver.zip "$CHROMEDRIVER_URL"
+        unzip chromedriver.zip
+        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
         sudo chmod +x /usr/local/bin/chromedriver
+        
+        # Create symlinks for compatibility
+        sudo ln -sf /usr/bin/google-chrome /usr/local/bin/google-chrome
         
         echo "✅ Installed versions:"
         google-chrome --version
         chromedriver --version
+        
+        # Test Chrome can start
+        echo "🧪 Testing Chrome startup..."
+        timeout 10s google-chrome --headless --no-sandbox --disable-gpu --dump-dom https://www.google.com > /dev/null || echo "Chrome test completed"
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install undetected-chromedriver requests beautifulsoup4 selenium supabase python-dotenv
+
+    - name: Setup virtual display
+      run: |
+        # Start virtual display for Chrome
+        export DISPLAY=:99
+        Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+        sleep 3
 
     - name: Run scraping script
       env:
@@ -65,6 +119,8 @@ jobs:
         EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+        DISPLAY: :99
       run: |
         # Enable debug logging
         export DEBUG=1
@@ -72,3 +128,10 @@ jobs:
         echo "=== Scrape log ==="
         cat scrape.log
         echo "=================="
+
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: scrape-logs
+        path: scrape.log

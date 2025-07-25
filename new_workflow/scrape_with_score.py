@@ -101,9 +101,11 @@ CAR_MODELS = [
 def get_driver():
     print("[DEBUG] Initializing Chrome options...")
     options = uc.ChromeOptions()
+    
+    # Essential options for CI environments
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-logging")
@@ -112,25 +114,57 @@ def get_driver():
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
     
-    # Add headless option for CI environments
+    # CI-specific options
     if os.getenv('GITHUB_ACTIONS') == 'true':
         print("[DEBUG] Running in CI environment, enabling headless mode")
         options.add_argument("--headless=new")
+        options.add_argument("--remote-debugging-port=9222")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        options.add_argument("--disable-renderer-backgrounding")
+        options.add_argument("--disable-features=TranslateUI")
+        options.add_argument("--disable-ipc-flooding-protection")
+        options.add_argument("--no-first-run")
+        options.add_argument("--no-default-browser-check")
+        options.add_argument("--disable-default-apps")
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--disable-web-security")
+        options.add_argument("--disable-features=VizDisplayCompositor")
     
     print("[DEBUG] Starting browser...")
     try:
-        driver = uc.Chrome(
-            options=options,
-            enable_cdp_events=True,
-            driver_executable_path='/usr/local/bin/chromedriver',
-            browser_executable_path='/usr/local/bin/google-chrome'
-        )
-        driver.set_page_load_timeout(60)  # Set 60-second timeout
+        # Try different approaches based on environment
+        if os.getenv('GITHUB_ACTIONS') == 'true':
+            # For GitHub Actions, use explicit paths and version
+            driver = uc.Chrome(
+                options=options,
+                version_main=138,  # Match your downloaded Chrome version
+                driver_executable_path='/usr/local/bin/chromedriver',
+                browser_executable_path='/usr/local/bin/google-chrome'
+            )
+        else:
+            # For local development
+            driver = uc.Chrome(options=options)
+            
+        driver.set_page_load_timeout(60)
         print("[DEBUG] Browser initialized successfully")
         return driver
+        
     except Exception as e:
-        print(f"[ERROR] Failed to initialize browser: {e}")
-        raise
+        print(f"[ERROR] Failed to initialize undetected-chromedriver: {e}")
+        print("[INFO] Falling back to regular Selenium WebDriver...")
+        
+        # Fallback to regular selenium webdriver
+        try:
+            from selenium.webdriver.chrome.service import Service
+            service = Service('/usr/local/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=options)
+            driver.set_page_load_timeout(60)
+            print("[DEBUG] Fallback browser initialized successfully")
+            return driver
+        except Exception as fallback_error:
+            print(f"[ERROR] Fallback also failed: {fallback_error}")
+            raise
 
 def get_existing_source_ids(model):
     """Get all existing source_ids for a model, ensuring consistent string type"""
