@@ -245,6 +245,13 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
         return False
     
     if not all([EMAIL_USER, EMAIL_PASSWORD, EMAIL_RECIPIENT]):
+        if not EMAIL_USER:
+            print("[WARN] EMAIL_USER is not set. Skipping email notification.")
+        if not EMAIL_PASSWORD:
+            print("[WARN] EMAIL_PASSWORD is not set. Skipping email notification.")
+        if not EMAIL_RECIPIENT:
+            print("[WARN] EMAIL_RECIPIENT is not set. Skipping email notification.")
+        
         print("[WARN] Email configuration missing. Skipping email notification.")
         return False
     
