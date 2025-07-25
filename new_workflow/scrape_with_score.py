@@ -132,39 +132,78 @@ def get_driver():
         options.add_argument("--disable-features=VizDisplayCompositor")
     
     print("[DEBUG] Starting browser...")
+    
+    # First try undetected-chromedriver
     try:
-        # Try different approaches based on environment
+        print("[DEBUG] Trying undetected-chromedriver first...")
+        
+        # Set explicit paths for CI
+        driver_executable_path = None
+        browser_executable_path = None
+        
         if os.getenv('GITHUB_ACTIONS') == 'true':
-            # For GitHub Actions, use explicit paths and version
-            driver = uc.Chrome(
-                options=options,
-                version_main=138,  # Match your downloaded Chrome version
-                driver_executable_path='/usr/local/bin/chromedriver',
-                browser_executable_path='/usr/local/bin/google-chrome'
-            )
-        else:
-            # For local development
-            driver = uc.Chrome(options=options)
-            
+            driver_executable_path = '/usr/local/bin/chromedriver'
+            browser_executable_path = '/usr/local/bin/google-chrome'
+            print("[DEBUG] Using explicit binary paths for CI")
+        
+        driver = uc.Chrome(
+            options=options,
+            driver_executable_path=driver_executable_path,
+            browser_executable_path=browser_executable_path,
+            version_main=138  # Explicitly specify Chrome version
+        )
         driver.set_page_load_timeout(60)
-        print("[DEBUG] Browser initialized successfully")
+        print("[DEBUG] Undetected ChromeDriver initialized successfully")
         return driver
         
     except Exception as e:
-        print(f"[ERROR] Failed to initialize undetected-chromedriver: {e}")
-        print("[INFO] Falling back to regular Selenium WebDriver...")
+        print(f"[WARN] Undetected-chromedriver failed: {e}")
+        print("[DEBUG] Falling back to regular Selenium...")
+    
+    # Fallback to regular Selenium
+    try:
+        from selenium.webdriver.chrome.service import Service
         
-        # Fallback to regular selenium webdriver
-        try:
-            from selenium.webdriver.chrome.service import Service
-            service = Service('/usr/local/bin/chromedriver')
-            driver = webdriver.Chrome(service=service, options=options)
-            driver.set_page_load_timeout(60)
-            print("[DEBUG] Fallback browser initialized successfully")
-            return driver
-        except Exception as fallback_error:
-            print(f"[ERROR] Fallback also failed: {fallback_error}")
-            raise
+        # Try different chromedriver paths
+        chromedriver_paths = [
+            '/usr/local/bin/chromedriver',
+            '/usr/bin/chromedriver',
+            'chromedriver'  # Let selenium find it
+        ]
+        
+        for path in chromedriver_paths:
+            try:
+                if path != 'chromedriver':
+                    # Check if file exists and is executable
+                    if not os.path.exists(path):
+                        print(f"[DEBUG] ChromeDriver not found at {path}")
+                        continue
+                    if not os.access(path, os.X_OK):
+                        print(f"[DEBUG] ChromeDriver at {path} is not executable")
+                        continue
+                
+                print(f"[DEBUG] Trying ChromeDriver at: {path}")
+                service = Service(path) if path != 'chromedriver' else Service()
+                
+                # For headless mode in CI
+                if os.getenv('GITHUB_ACTIONS') == 'true':
+                    options.add_argument("--headless=new")
+                
+                driver = webdriver.Chrome(service=service, options=options)
+                driver.set_page_load_timeout(60)
+                print("[DEBUG] Regular Selenium WebDriver initialized successfully")
+                return driver
+                
+            except Exception as e:
+                print(f"[DEBUG] Failed with ChromeDriver at {path}: {e}")
+                continue
+        
+        print("[ERROR] All ChromeDriver paths failed")
+        
+    except Exception as e:
+        print(f"[ERROR] Regular Selenium setup failed: {e}")
+    
+    raise Exception("Could not initialize any WebDriver. Please check Chrome and ChromeDriver installation.")
 
 def get_existing_source_ids(model):
     """Get all existing source_ids for a model, ensuring consistent string type"""

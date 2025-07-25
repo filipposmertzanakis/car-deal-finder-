@@ -50,27 +50,69 @@ jobs:
           libgtk-3-0 \
           libgdk-pixbuf2.0-0
 
-
-    - name: Setup Chrome and Chromedriver (Simple)
+    - name: Setup Chrome and Chromedriver
       run: |
-        echo "⬇️ Installing Chrome and ChromeDriver..."
+        echo "⬇️ Installing Chrome..."
         
-        # Install Chrome
+        # Install Chrome via apt (more reliable)
         wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
         echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
         sudo apt-get update
         sudo apt-get install -y google-chrome-stable
         
-        # Install ChromeDriver via apt (usually compatible)
-        sudo apt-get install -y chromium-chromedriver
+        # Get Chrome version
+        CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+        CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
+        echo "Chrome version: $CHROME_VERSION (Major: $CHROME_MAJOR_VERSION)"
         
-        # Create symlinks
+        # Download ChromeDriver using the Chrome for Testing API
+        echo "⬇️ Downloading matching ChromeDriver..."
+        
+        # First try exact version match
+        CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip"
+        echo "Trying exact version: $CHROMEDRIVER_URL"
+        
+        if wget -q --spider "$CHROMEDRIVER_URL"; then
+          echo "✅ Found exact version match"
+          wget -O chromedriver.zip "$CHROMEDRIVER_URL"
+        else
+          echo "❌ Exact version not found, trying latest stable for major version $CHROME_MAJOR_VERSION..."
+          
+          # Get latest version for this major version
+          LATEST_VERSIONS_URL="https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone.json"
+          LATEST_VERSION=$(curl -s "$LATEST_VERSIONS_URL" | grep -o "\"$CHROME_MAJOR_VERSION\":{\"version\":\"[^\"]*\"" | cut -d'"' -f4)
+          
+          if [ -n "$LATEST_VERSION" ]; then
+            CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${LATEST_VERSION}/linux64/chromedriver-linux64.zip"
+            echo "Trying latest stable: $CHROMEDRIVER_URL"
+            wget -O chromedriver.zip "$CHROMEDRIVER_URL"
+          else
+            echo "❌ Could not find ChromeDriver for major version $CHROME_MAJOR_VERSION"
+            echo "📦 Installing ChromeDriver via apt as fallback..."
+            sudo apt-get install -y chromium-chromedriver
+            sudo chmod 755 /usr/bin/chromedriver
+            sudo ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver
+            echo "✅ ChromeDriver installed via apt"
+            exit 0
+          fi
+        fi
+        
+        # Extract and install ChromeDriver
+        unzip chromedriver.zip
+        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
+        sudo chmod 755 /usr/local/bin/chromedriver
+        sudo chown root:root /usr/local/bin/chromedriver
+        
+        # Create Chrome symlink for compatibility
         sudo ln -sf /usr/bin/google-chrome /usr/local/bin/google-chrome
-        sudo ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver
         
         echo "✅ Installed versions:"
         google-chrome --version
         chromedriver --version
+        
+        # Test Chrome startup
+        echo "🧪 Testing Chrome startup..."
+        timeout 10s google-chrome --headless --no-sandbox --disable-gpu --dump-dom https://www.google.com > /dev/null && echo "✅ Chrome test passed" || echo "⚠️ Chrome test completed with warnings"
 
     - name: Install Python dependencies
       run: |
