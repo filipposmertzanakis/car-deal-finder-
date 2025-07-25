@@ -31,31 +31,24 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          libgbm-dev \
           wget \
           unzip \
           libnss3-dev \
-          libgconf-2-4 \
+          libgbm-dev \
           libxss1 \
-          libappindicator1 \
-          libindicator7 \
-          gconf-service \
-          libgconf2-dev \
-          libxss1 \
-          libappindicator1 \
+          libappindicator3-1 \
           fonts-liberation \
           libnspr4 \
           libnss3 \
           libx11-xcb1 \
           libxtst6 \
           libxrandr2 \
-          libasound2 \
+          libasound2-dev \
           libpangocairo-1.0-0 \
           libatk1.0-0 \
           libcairo-gobject2 \
           libgtk-3-0 \
-          libgdk-pixbuf2.0-0 \
-          xvfb
+          libgdk-pixbuf2.0-0
 
     - name: Setup Chrome and Chromedriver
       run: |
@@ -104,13 +97,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install undetected-chromedriver requests beautifulsoup4 selenium supabase python-dotenv
 
-    - name: Setup virtual display
-      run: |
-        # Start virtual display for Chrome
-        export DISPLAY=:99
-        Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
-        sleep 3
-
     - name: Run scraping script
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -119,8 +105,6 @@ jobs:
         EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-        EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
-        DISPLAY: :99
       run: |
         # Enable debug logging
         export DEBUG=1
