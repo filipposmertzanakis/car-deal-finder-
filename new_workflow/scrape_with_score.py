@@ -29,7 +29,8 @@ EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")  # e.g., smtp.gmail.com
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USER = os.getenv("EMAIL_USER")  # Your email
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # Your email password or app password
-EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")  # Recipient email
+# EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")  # Recipient email
+EMAIL_RECIPIENT = "filipposmertz@gmail.com"
 
 # Complete Car models configuration
 CAR_MODELS = [
