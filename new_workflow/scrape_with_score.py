@@ -249,7 +249,8 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
         "filipposmertz@gmail.com",
         "pakoissick@gmail.com",
         "carflipgr@gmail.com",
-        "Lefos.ns@gmail.com"
+        "Lefos.ns@gmail.com" , 
+        "piaggiostockhouse@hotmail.gr"
     ]
     
     if not all([EMAIL_USER, EMAIL_PASSWORD]):
