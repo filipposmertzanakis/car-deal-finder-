@@ -50,47 +50,27 @@ jobs:
           libgtk-3-0 \
           libgdk-pixbuf2.0-0
 
-    - name: Setup Chrome and Chromedriver
+
+    - name: Setup Chrome and Chromedriver (Simple)
       run: |
-        echo "⬇️ Downloading and installing Chrome..."
+        echo "⬇️ Installing Chrome and ChromeDriver..."
         
-        # Download stable Chrome version
+        # Install Chrome
         wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
         echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
         sudo apt-get update
         sudo apt-get install -y google-chrome-stable
         
-        # Get Chrome version and download matching chromedriver
-        CHROME_VERSION=$(google-chrome --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-        CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
-        echo "Chrome version: $CHROME_VERSION (Major: $CHROME_MAJOR_VERSION)"
+        # Install ChromeDriver via apt (usually compatible)
+        sudo apt-get install -y chromium-chromedriver
         
-        # Download matching chromedriver
-        echo "⬇️ Downloading matching Chromedriver..."
-        CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip"
-        
-        # If specific version not found, try latest stable
-        if ! wget -q --spider "$CHROMEDRIVER_URL"; then
-          echo "Specific version not found, trying latest stable..."
-          LATEST_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone.json" | grep -o "\"$CHROME_MAJOR_VERSION\":{\"version\":\"[^\"]*" | cut -d'"' -f4)
-          CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${LATEST_VERSION}/linux64/chromedriver-linux64.zip"
-        fi
-        
-        wget -O chromedriver.zip "$CHROMEDRIVER_URL"
-        unzip chromedriver.zip
-        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
-        sudo chmod +x /usr/local/bin/chromedriver
-        
-        # Create symlinks for compatibility
+        # Create symlinks
         sudo ln -sf /usr/bin/google-chrome /usr/local/bin/google-chrome
+        sudo ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver
         
         echo "✅ Installed versions:"
         google-chrome --version
         chromedriver --version
-        
-        # Test Chrome can start
-        echo "🧪 Testing Chrome startup..."
-        timeout 10s google-chrome --headless --no-sandbox --disable-gpu --dump-dom https://www.google.com > /dev/null || echo "Chrome test completed"
 
     - name: Install Python dependencies
       run: |
