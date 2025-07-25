@@ -248,8 +248,8 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
     recipients = [
         "filipposmertz@gmail.com",
         "pakoissick@gmail.com",
-        "carflipgr@example.com",
-        "fourth@example.com"
+        "carflipgr@gmail.com",
+        "Lefos.ns@gmail.com"
     ]
     
     if not all([EMAIL_USER, EMAIL_PASSWORD]):
