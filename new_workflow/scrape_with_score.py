@@ -114,43 +114,28 @@ def get_driver():
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
     
-    # CI-specific options
+# CI-specific paths
     if os.getenv('GITHUB_ACTIONS') == 'true':
         print("[DEBUG] Running in CI environment, enabling headless mode")
         options.add_argument("--headless=new")
-        options.add_argument("--remote-debugging-port=9222")
-        options.add_argument("--disable-background-timer-throttling")
-        options.add_argument("--disable-backgrounding-occluded-windows")
-        options.add_argument("--disable-renderer-backgrounding")
-        options.add_argument("--disable-features=TranslateUI")
-        options.add_argument("--disable-ipc-flooding-protection")
-        options.add_argument("--no-first-run")
-        options.add_argument("--no-default-browser-check")
-        options.add_argument("--disable-default-apps")
-        options.add_argument("--disable-popup-blocking")
-        options.add_argument("--disable-web-security")
-        options.add_argument("--disable-features=VizDisplayCompositor")
-    
-    print("[DEBUG] Starting browser...")
-    
-    # First try undetected-chromedriver
-    try:
-        print("[DEBUG] Trying undetected-chromedriver first...")
-        
-        # Set explicit paths for CI
+        # ... other CI arguments ...
+
+        # Use user-installed binaries
+        driver_executable_path = os.path.expanduser('~/chromedriver')
+        browser_executable_path = '/usr/bin/google-chrome'
+    else:
         driver_executable_path = None
         browser_executable_path = None
-        
-        if os.getenv('GITHUB_ACTIONS') == 'true':
-            driver_executable_path = '/usr/local/bin/chromedriver'
-            browser_executable_path = '/usr/local/bin/google-chrome'
-            print("[DEBUG] Using explicit binary paths for CI")
-        
+
+    print("[DEBUG] Starting browser...")
+    
+    try:
+        print("[DEBUG] Trying undetected-chromedriver...")
         driver = uc.Chrome(
             options=options,
             driver_executable_path=driver_executable_path,
             browser_executable_path=browser_executable_path,
-            version_main=138  # Explicitly specify Chrome version
+            version_main=138
         )
         driver.set_page_load_timeout(60)
         print("[DEBUG] Undetected ChromeDriver initialized successfully")
@@ -166,9 +151,10 @@ def get_driver():
         
         # Try different chromedriver paths
         chromedriver_paths = [
+            os.path.expanduser('~/chromedriver'),  # New CI path
             '/usr/local/bin/chromedriver',
             '/usr/bin/chromedriver',
-            'chromedriver'  # Let selenium find it
+            'chromedriver'
         ]
         
         for path in chromedriver_paths:
