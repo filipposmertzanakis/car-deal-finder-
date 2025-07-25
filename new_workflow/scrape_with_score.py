@@ -239,16 +239,16 @@ def assign_deal_score(listing, stats):
         return 4  # Expensive
 
 def send_email_notification(high_profit_deals, all_stats_by_model):
-    """Send email notification for cars with high profit margins to multiple recipients"""
+    """Send email notification for cars with high profit margins"""
     if not high_profit_deals:
         print("[INFO] No high profit deals found. No email sent.")
         return False
     
-    # Hardcoded list of recipients
+        # Hardcoded list of recipients
     recipients = [
         "filipposmertz@gmail.com",
         "pakoissick@gmail.com",
-        "carflipgr@gmail.com",
+        "carflipgr@example.com",
         "fourth@example.com"
     ]
     
@@ -262,7 +262,8 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
         return False
     
     try:
-        # Build email content once (reused for all recipients)
+        # Create message
+
         subject = f"🚗 Ειδοποίηση Επικερδών Αυτοκινήτων - {len(high_profit_deals)} Ευκαιρίες!"
         
         # Complete HTML email body with styling
@@ -270,7 +271,112 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
         <html>
         <head>
             <style>
-                /* Your existing CSS styles */
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 0; 
+                    padding: 20px; 
+                    background-color: #f8f9ff;
+                    color: #2c3e50;
+                }}
+                .container {{
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background-color: white;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                .header {{ 
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                    color: white; 
+                    padding: 30px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 28px;
+                    font-weight: 600;
+                }}
+                .header p {{
+                    margin: 10px 0 0 0;
+                    font-size: 16px;
+                    opacity: 0.9;
+                }}
+                .content {{
+                    padding: 20px;
+                }}
+                .deal {{ 
+                    border: 2px solid #e3f2fd;
+                    border-radius: 10px; 
+                    margin: 20px 0; 
+                    padding: 20px; 
+                    background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+                    transition: transform 0.2s ease;
+                }}
+                .deal:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(30, 60, 114, 0.15);
+                }}
+                .deal-title {{ 
+                    color: #1e3c72; 
+                    font-weight: bold; 
+                    font-size: 20px;
+                    margin-bottom: 15px;
+                    border-bottom: 1px solid #e3f2fd;
+                    padding-bottom: 10px;
+                }}
+                .profit {{ 
+                    color: #1976d2; 
+                    font-weight: bold; 
+                    font-size: 18px;
+                    background-color: #e3f2fd;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    display: inline-block;
+                }}
+                .details {{ 
+                    margin: 12px 0; 
+                    font-size: 14px;
+                    line-height: 1.6;
+                }}
+                .details strong {{
+                    color: #1e3c72;
+                }}
+                .link {{ 
+                    display: inline-block;
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                    color: white;
+                    text-decoration: none; 
+                    padding: 12px 24px;
+                    border-radius: 6px;
+                    font-weight: 500;
+                    margin-top: 10px;
+                    transition: all 0.3s ease;
+                }}
+                .link:hover {{
+                    background: linear-gradient(135deg, #164463 0%, #1f4287 100%);
+                    transform: translateY(-1px);
+                }}
+                .footer {{ 
+                    margin-top: 30px; 
+                    padding: 20px;
+                    background-color: #f8f9ff;
+                    color: #666; 
+                    font-size: 12px;
+                    text-align: center;
+                    border-top: 1px solid #e3f2fd;
+                }}
+                .stats {{
+                    background: linear-gradient(135deg, #e3f2fd 0%, #f8f9ff 100%);
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    text-align: center;
+                }}
+                .stats h3 {{
+                    color: #1e3c72;
+                    margin: 0 0 10px 0;
+                }}
             </style>
         </head>
         <body>
@@ -353,7 +459,8 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
         </html>
         """
         
-        # Send individual emails
+        
+ # Send individual emails
         with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
             server.starttls()
             server.login(EMAIL_USER, EMAIL_PASSWORD)
@@ -386,7 +493,6 @@ def send_email_notification(high_profit_deals, all_stats_by_model):
     except Exception as e:
         print(f"[ERROR] Email system failure: {e}")
         return False
-
 
 def get_total_pages(driver, url):
     print("[INFO] Determining total number of pages...")
